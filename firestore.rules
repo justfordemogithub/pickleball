@@ -1,0 +1,123 @@
+rules_version = '2';
+
+// Pickleball Rotation Planner: who may read and change the data.
+// 1) On the adminEmail line below, put the organizer's Gmail in lower case.
+// 2) Paste this whole file into Firebase console > Firestore Database > Rules, then tap Publish.
+// Anything not allowed here is refused.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function adminEmail() {
+      return 'your.name@gmail.com';
+    }
+
+    // ---------- Who is asking ----------
+    function signedIn() {
+      return request.auth != null
+        && request.auth.token.email is string
+        && request.auth.token.email_verified == true;
+    }
+    function myEmail() {
+      return request.auth.token.email.lower();
+    }
+    // The username the organizer gave this person. Sessions must store exactly this,
+    // so "Started by" and "Last change by" cannot be faked.
+    function myUsername() {
+      return get(/databases/$(database)/documents/config/members).data.get('names', {}).get(myEmail(), '');
+    }
+    function isAdmin() {
+      return signedIn() && myEmail() == adminEmail();
+    }
+    function isMember() {
+      return isAdmin()
+        || (signedIn()
+            && exists(/databases/$(database)/documents/config/members)
+            && myEmail() in get(/databases/$(database)/documents/config/members).data.emails);
+    }
+
+    // ---------- What a session may contain ----------
+    function isStr(v, max) {
+      return v is string && v.size() <= max;
+    }
+    function validSession(d) {
+      return d.keys().hasOnly(['day', 'dayKey', 'seq', 'name', 'createdAt', 'expiresAt', 'createdBy', 'createdByName',
+                               'status', 'players', 'courts', 'games', 'schedule', 'winners', 'done',
+                               'updatedAt', 'updatedBy', 'updatedByName', 'completedAt', 'completedByName'])
+        && isStr(d.day, 40) && isStr(d.dayKey, 12) && d.seq is int && isStr(d.name, 80)
+        && d.createdAt is int && d.expiresAt is int && d.updatedAt is int
+        && isStr(d.createdBy, 128) && isStr(d.createdByName, 200)
+        && isStr(d.updatedBy, 128) && isStr(d.updatedByName, 200)
+        && d.status in ['live', 'completed']
+        && d.players is list && d.players.size() >= 4 && d.players.size() <= 12
+        && d.courts in [1, 2]
+        && d.games is int && d.games >= 4 && d.games <= 20
+        && d.schedule is map
+        && d.winners is map && d.winners.size() <= 40
+        && d.done is map && d.done.size() <= 20
+        && (!('completedAt' in d) || d.completedAt is int)
+        && (!('completedByName' in d) || isStr(d.completedByName, 200));
+    }
+
+    // ---------- Member list ----------
+    // Up to 12 Google accounts, organizer included.
+    // Only the organizer can read or change it. The checks above still use it for everyone.
+    match /config/members {
+      allow read: if isAdmin();
+      allow write: if isAdmin()
+        && request.resource.data.keys().hasOnly(['emails', 'names', 'updatedAt'])
+        && request.resource.data.emails is list
+        && request.resource.data.emails.size() <= 12
+        && adminEmail() in request.resource.data.emails
+        && request.resource.data.names is map
+        && request.resource.data.names.size() <= 12;
+    }
+
+    // ---------- Profiles ----------
+    // One per member, holding only their username. Each person can read only their own.
+    // Only the organizer can write them (together with the member list).
+    match /profiles/{email} {
+      allow get: if signedIn() && (email == myEmail() || isAdmin());
+      allow list: if isAdmin();
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['username', 'updatedAt'])
+        && isStr(request.resource.data.username, 20)
+        && request.resource.data.username.size() >= 2;
+      allow delete: if isAdmin();
+    }
+
+    // ---------- Sessions ----------
+    match /sessions/{sessionId} {
+      allow read: if isMember();
+
+      // A new session starts live, empty, owned by the person creating it, and expires within 8 days.
+      allow create: if isMember()
+        && validSession(request.resource.data)
+        && request.resource.data.status == 'live'
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.createdByName == myUsername()
+        && request.resource.data.updatedByName == myUsername()
+        && request.resource.data.winners.size() == 0
+        && request.resource.data.done.size() == 0
+        && request.resource.data.expiresAt <= request.time.toMillis() + 8 * 86400000;
+
+      // During play members may change winners, finished games, status and name spelling.
+      // The schedule, owner, start time and expiry can never be changed.
+      allow update: if isMember()
+        && validSession(request.resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['winners', 'done', 'status', 'players', 'updatedAt', 'updatedBy', 'updatedByName', 'completedAt', 'completedByName'])
+        && request.resource.data.players.size() == resource.data.players.size()
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.updatedByName == myUsername();
+
+      // The organizer or the person who started a session can delete it.
+      // After its 7 days are over, any member's app deletes it automatically.
+      allow delete: if isMember()
+        && (isAdmin()
+            || resource.data.createdBy == request.auth.uid
+            || resource.data.expiresAt < request.time.toMillis());
+    }
+  }
+}

@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-TsUC3NmGDk3JHw1GkAdbtDhMisvNRHPmsSiuauadgf4=' https://www.gstatic.com https://apis.google.com; connect-src 'self' https://*.googleapis.com https://*.firebaseapp.com; frame-src https://*.firebaseapp.com https://accounts.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; object-src 'none'; base-uri 'self'; form-action 'self'; worker-src 'none'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Pickleball Rotation Planner</title>
+<meta name="description" content="Fair doubles rotations for 4 to 12 players, shared live with your group.">
+<meta name="theme-color" content="#2C67A8">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-title" content="Pickleball">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=Saira+Condensed:wght@600;700;800&display=swap">
+<script>try{var t=localStorage.getItem("pb-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="stylesheet" href="styles.css?v=7">
+</head>
+<body>
+<div class="app" id="app">
+  <header class="top">
+    <a class="brand" href="#home" style="text-decoration:none;color:inherit">
+      <svg class="logo" viewBox="0 0 48 48" aria-hidden="true">
+        <circle class="ball" cx="24" cy="24" r="21"/>
+        <circle class="hole" cx="24" cy="11.5" r="3"/><circle class="hole" cx="13" cy="18" r="3"/><circle class="hole" cx="35" cy="18" r="3"/>
+        <circle class="hole" cx="24" cy="24.5" r="3"/><circle class="hole" cx="15" cy="31.5" r="3"/><circle class="hole" cx="33" cy="31.5" r="3"/><circle class="hole" cx="24" cy="38" r="2.6"/>
+      </svg>
+      <div>
+        <h1>Pickleball Rotation Planner</h1>
+        <p>For 4 to 12 players on one or two courts.</p>
+      </div>
+    </a>
+    <div class="who" id="who"></div>
+  </header>
+
+  <p class="banner" id="banner" hidden></p>
+
+  <main>
+    <!-- Sign in / access -->
+    <section id="view-auth" class="auth" hidden>
+      <div class="auth-card" id="authCard"></div>
+    </section>
+
+    <!-- Dashboard -->
+    <section id="view-home" class="view" hidden aria-labelledby="homeTitle">
+      <div class="dash-head">
+        <div>
+          <h2 id="homeTitle">Sessions</h2>
+          <p class="sub">Each session is kept for 7 days, then deleted automatically.</p>
+        </div>
+        <a class="btn primary" href="#new" id="newBtn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span id="newBtnText">New session</span></a>
+      </div>
+      <div id="homeList"></div>
+    </section>
+
+    <!-- New session: players, then preview -->
+    <section id="view-new" class="view" hidden aria-labelledby="setupTitle">
+      <a class="back" href="#home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>Sessions</a>
+      <nav aria-label="Steps">
+        <ol class="steps">
+          <li><button type="button" id="step-setup" data-go="setup"><span class="n">1</span><span class="t">Players</span></button></li>
+          <li><button type="button" id="step-preview" data-go="preview"><span class="n">2</span><span class="t">Preview</span></button></li>
+          <li><button type="button" id="step-play" disabled><span class="n">3</span><span class="t">Play</span></button></li>
+        </ol>
+      </nav>
+
+      <div id="new-setup" class="view">
+        <div class="setup-grid">
+          <div class="panel">
+            <div class="panel-head">
+              <h2 id="setupTitle">Players</h2>
+              <span class="count" id="playerCount">0 of 12</span>
+            </div>
+            <p class="note" id="setupNote"></p>
+            <ol class="player-list" id="playerList"></ol>
+            <div class="row-actions">
+              <button type="button" class="btn ghost small" id="addPlayer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add player</button>
+              <button type="button" class="btn ghost small" id="clearPlayers">Clear all names</button>
+            </div>
+          </div>
+
+          <div class="panel settings">
+            <h2>Match settings</h2>
+            <div>
+              <span class="label" id="courtsLabel">Courts</span>
+              <div class="seg" role="radiogroup" aria-labelledby="courtsLabel">
+                <button type="button" role="radio" id="courts-1" data-courts="1"><span class="seg-courts" aria-hidden="true"><i></i></span><strong>1 court</strong><small>Court 1</small></button>
+                <button type="button" role="radio" id="courts-2" data-courts="2"><span class="seg-courts" aria-hidden="true"><i></i><i></i></span><strong>2 courts</strong><small>Court 1 &amp; Court 2, side by side</small></button>
+              </div>
+              <p class="hint" id="courtHint"></p>
+            </div>
+            <div>
+              <label class="label" for="games">Games to play</label>
+              <div class="games-ctl">
+                <button type="button" class="btn ghost round" id="gamesMinus" aria-label="One game fewer">−</button>
+                <output id="gamesOut" for="games">12</output>
+                <span class="unit">games</span>
+                <button type="button" class="btn ghost round" id="gamesPlus" aria-label="One game more">+</button>
+              </div>
+              <input type="range" id="games" min="4" max="20" step="1" value="12" aria-describedby="gamesHint">
+              <div class="chips" id="gameChips">
+                <button type="button" class="chip" data-g="4">4</button>
+                <button type="button" class="chip" data-g="8">8</button>
+                <button type="button" class="chip" data-g="12">12</button>
+                <button type="button" class="chip" data-g="16">16</button>
+                <button type="button" class="chip" data-g="20">20</button>
+              </div>
+              <p class="hint" id="gamesHint">Minimum 4, default 12, maximum 20.</p>
+            </div>
+            <div class="lineup-box">
+              <div class="lineup" id="lineup" aria-hidden="true"></div>
+              <p class="summary" id="setupSummary"></p>
+            </div>
+            <p class="error" id="setupError" role="alert" hidden></p>
+            <button type="button" class="btn primary big" id="toPreview">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 3h5v5"/><path d="M4 20 21 3"/><path d="M21 16v5h-5"/><path d="m15 15 6 6"/><path d="m4 4 5 5"/></svg>
+              <span>Generate preview</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div id="new-preview" class="view" hidden>
+        <div class="view-head">
+          <div>
+                        <h2 id="previewTitle">Schedule preview</h2>
+            <p class="sub" id="previewMeta"></p>
+          </div>
+          <div class="actions">
+            <button type="button" class="btn ghost" id="backToSetup"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>Edit players</button>
+            <button type="button" class="btn primary" id="confirm"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7"/></svg>Confirm schedule</button>
+          </div>
+        </div>
+        <dl class="facts" id="previewFacts"></dl>
+        <div id="previewSchedule"></div>
+        <details class="panel stats-panel">
+          <summary>Player summary</summary>
+          <div class="table-scroll" id="previewStats"></div>
+        </details>
+        <div class="bottom-actions">
+          <button type="button" class="btn primary big" id="confirm2">Confirm schedule</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- One session: live tracker, or results + analysis when completed -->
+    <section id="view-session" class="view" hidden aria-labelledby="sTitle">
+      <div>
+        <a class="back" href="#home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>Sessions</a>
+        <div class="sess-head">
+          <div>
+            <h2 id="sTitle"></h2>
+            <p class="sub" id="sMeta"></p>
+            <p class="updated" id="sUpdated"></p>
+          </div>
+          <div class="actions" id="sActions"></div>
+        </div>
+      </div>
+      <div class="view" id="sBody"></div>
+    </section>
+
+    <!-- Members -->
+    <section id="view-members" class="view" hidden aria-labelledby="mTitle">
+      <div>
+        <a class="back" href="#home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>Sessions</a>
+        <h2 id="mTitle" class="view-title">Manage members <span class="chip-status completed" style="vertical-align:6px">Organizer only</span></h2>
+      </div>
+      <div class="panel" id="mBody"></div>
+    </section>
+  </main>
+
+  <footer class="credit" id="credit" hidden></footer>
+
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="firebase-config.js?v=7"></script>
+<script src="engine.js?v=7"></script>
+<script src="app.js?v=7"></script>
+</body>
+</html>
